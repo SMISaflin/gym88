@@ -2,17 +2,23 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useToast } from "@/components/ToastProvider";
 
-const initialPackages = [
-  { id: 1, title: "Basic", price: "Rp 150.000", desc: ["Akses gym", "Locker", "1x Trainer (opsional)"], popular: false },
-  { id: 2, title: "Regular", price: "Rp 250.000", desc: ["Akses gym", "Locker", "2x Trainer (opsional)", "Kelas grup"], popular: true },
-  { id: 3, title: "Premium", price: "Rp 400.000", desc: ["Akses gym sepuasnya", "Locker VIP", "Unlimited trainer", "Body composition"], popular: false },
-];
+interface GymPackage {
+  id: string;
+  title: string;
+  price: string;
+  desc: string[];
+  popular: boolean;
+}
 
 export default function AdminPackagesManagePage() {
-  const [packages, setPackages] = useState(initialPackages);
+  const { showToast } = useToast();
+
+  const [packages, setPackages] = useState<GymPackage[]>([]);
+  const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<"daftar" | "tambah" | "ubah">("daftar");
-  const [selectedId, setSelectedId] = useState<number | null>(1);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -21,22 +27,31 @@ export default function AdminPackagesManagePage() {
     popular: false,
   });
 
-  // Sinkronisasi data ke localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("gym88_packages_manage");
-    if (saved) {
-      try {
-        setPackages(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
+  // Ambil data murni dari API Database MySQL
+  const fetchPackages = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/admin/packages");
+      const json = await res.json();
+      if (json.success) {
+        setPackages(json.data);
+        if (json.data.length > 0 && (!selectedId || !json.data.some((p: GymPackage) => p.id === selectedId))) {
+          setSelectedId(json.data[0].id);
+        }
+      } else {
+        showToast("Gagal memuat paket dari server.", "error");
       }
+    } catch (error) {
+      console.error(error);
+      showToast("Terjadi kesalahan koneksi database.", "error");
+    } finally {
+      setLoading(false);
     }
-  }, []);
-
-  const saveToStorage = (updated: typeof initialPackages) => {
-    setPackages(updated);
-    localStorage.setItem("gym88_packages_manage", JSON.stringify(updated));
   };
+
+  useEffect(() => {
+    fetchPackages();
+  }, []);
 
   // Tombol Aksi: Ubah mode ke Tambah
   const handleOpenTambah = () => {
@@ -56,65 +71,68 @@ export default function AdminPackagesManagePage() {
       });
       setMode("ubah");
     } else {
-      alert("Pilih paket terlebih dahulu pada menu Daftar!");
+      showToast("Pilih paket terlebih dahulu pada menu Daftar!", "warning");
     }
   };
 
-  // Tombol Aksi: Hapus data
-  const handleHapus = () => {
+  // Tombol Aksi: Hapus data dari Database
+  const handleHapus = async () => {
     if (!selectedId) {
-      alert("Pilih paket yang ingin dihapus!");
+      showToast("Pilih paket yang ingin dihapus!", "warning");
       return;
     }
-    if (confirm("Apakah Anda yakin ingin menghapus paket membership ini?")) {
-      const updated = packages.filter((p) => p.id !== selectedId);
-      saveToStorage(updated);
-      setSelectedId(updated.length > 0 ? updated[0].id : null);
-      setMode("daftar");
+
+    if (window.confirm("Apakah Anda yakin ingin menghapus paket membership ini dari database?")) {
+      try {
+        const res = await fetch(`/api/admin/packages?id=${selectedId}`, {
+          method: "DELETE",
+        });
+        const json = await res.json();
+        if (json.success) {
+          showToast("Paket membership berhasil dihapus dari database!", "success");
+          fetchPackages();
+          setSelectedId(null);
+          setMode("daftar");
+        } else {
+          showToast(`Gagal menghapus: ${json.message}`, "error");
+        }
+      } catch (error) {
+        showToast("Gagal menghapus paket dari database.", "error");
+      }
     }
   };
 
-  // Submit Simpan Tambah / Ubah
-  const handleSubmit = (e: React.FormEvent) => {
+  // Submit Simpan Tambah / Ubah ke Database API
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.price) {
-      alert("Nama paket dan harga wajib diisi!");
+      showToast("Nama paket dan harga wajib diisi!", "warning");
       return;
     }
 
-    const descArray = formData.descString
-      ? formData.descString.split(",").map((item) => item.trim()).filter(Boolean)
-      : [];
+    try {
+      const url = "/api/admin/packages";
+      const method = mode === "tambah" ? "POST" : "PUT";
+      const payload = mode === "ubah" ? { ...formData, id: selectedId } : formData;
 
-    if (mode === "tambah") {
-      const newId = packages.length > 0 ? Math.max(...packages.map((p) => p.id)) + 1 : 1;
-      const newPkg = {
-        id: newId,
-        title: formData.title,
-        price: formData.price,
-        desc: descArray,
-        popular: formData.popular,
-      };
-      const updated = [...packages, newPkg];
-      saveToStorage(updated);
-      setSelectedId(newId);
-      alert("Paket baru berhasil ditambahkan!");
-    } else if (mode === "ubah" && selectedId !== null) {
-      const updated = packages.map((p) =>
-        p.id === selectedId
-          ? {
-              ...p,
-              title: formData.title,
-              price: formData.price,
-              desc: descArray,
-              popular: formData.popular,
-            }
-          : p
-      );
-      saveToStorage(updated);
-      alert("Paket berhasil diperbarui!");
+      const res = await fetch(url, {
+        method: method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        showToast(mode === "tambah" ? "Paket baru berhasil disimpan ke database!" : "Paket berhasil diperbarui!", "success");
+        fetchPackages();
+        setMode("daftar");
+      } else {
+        showToast(`Gagal: ${json.message}`, "error");
+      }
+    } catch (error) {
+      showToast("Terjadi kesalahan koneksi ke server.", "error");
     }
-    setMode("daftar");
   };
 
   return (
@@ -132,7 +150,7 @@ export default function AdminPackagesManagePage() {
         {/* Title & Top Action Buttons */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h1 className="text-xl font-extrabold text-sky-600 tracking-tight">
-            Pengelolaan Paket Membership
+            Pengelolaan Paket Membership Database
           </h1>
 
           {/* Button Group: TAMBAH, UBAH, HAPUS, DAFTAR */}
@@ -172,9 +190,9 @@ export default function AdminPackagesManagePage() {
         <div className="bg-sky-400 text-white text-xs px-4 py-3 rounded-xl font-medium shadow-inner flex items-center space-x-2">
           <i className="fa-solid fa-circle-info text-sm"></i>
           <span>
-            {mode === "daftar" && "Menampilkan seluruh daftar paket membership Gym 88. Pilih salah satu baris untuk dikelola."}
-            {mode === "tambah" && "Formulir penambahan paket membership baru Gym 88."}
-            {mode === "ubah" && "Formulir pembaruan informasi dan fasilitas paket membership terpilih."}
+            {mode === "daftar" && "Menampilkan seluruh daftar paket membership Gym 88 langsung dari database MySQL. Pilih salah satu baris untuk dikelola."}
+            {mode === "tambah" && "Formulir penambahan paket membership baru ke dalam database."}
+            {mode === "ubah" && "Formulir pembaruan informasi dan fasilitas paket membership di database."}
           </span>
         </div>
 
@@ -194,36 +212,50 @@ export default function AdminPackagesManagePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                  {packages.map((pkg, idx) => (
-                    <tr 
-                      key={pkg.id} 
-                      onClick={() => setSelectedId(pkg.id)}
-                      className={`cursor-pointer transition ${selectedId === pkg.id ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
-                    >
-                      <td className="p-3 text-center">
-                        <input 
-                          type="radio" 
-                          name="selectedPackage" 
-                          checked={selectedId === pkg.id} 
-                          onChange={() => setSelectedId(pkg.id)}
-                          className="accent-sky-500"
-                        />
-                      </td>
-                      <td className="p-3 text-slate-500">{idx + 1}</td>
-                      <td className="p-3 font-bold text-sky-700">{pkg.title}</td>
-                      <td className="p-3 font-mono font-bold text-slate-900">{pkg.price}</td>
-                      <td className="p-3 text-slate-600">{pkg.desc.join(", ")}</td>
-                      <td className="p-3">
-                        {pkg.popular ? (
-                          <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                            Populer
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400">
+                        <i className="fa-solid fa-spinner animate-spin text-lg mr-2"></i> Memuat paket dari database...
                       </td>
                     </tr>
-                  ))}
+                  ) : packages.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center text-slate-400">
+                        Belum ada paket membership tersedia di database.
+                      </td>
+                    </tr>
+                  ) : (
+                    packages.map((pkg, idx) => (
+                      <tr 
+                        key={pkg.id} 
+                        onClick={() => setSelectedId(pkg.id)}
+                        className={`cursor-pointer transition ${selectedId === pkg.id ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
+                      >
+                        <td className="p-3 text-center">
+                          <input 
+                            type="radio" 
+                            name="selectedPackage" 
+                            checked={selectedId === pkg.id} 
+                            onChange={() => setSelectedId(pkg.id)}
+                            className="accent-sky-500"
+                          />
+                        </td>
+                        <td className="p-3 text-slate-500">{idx + 1}</td>
+                        <td className="p-3 font-bold text-sky-700">{pkg.title}</td>
+                        <td className="p-3 font-mono font-bold text-slate-900">{pkg.price}</td>
+                        <td className="p-3 text-slate-600">{pkg.desc.join(", ")}</td>
+                        <td className="p-3">
+                          {pkg.popular ? (
+                            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                              Populer
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -315,7 +347,7 @@ export default function AdminPackagesManagePage() {
                 type="submit"
                 className="bg-sky-500 hover:bg-sky-600 text-white font-bold px-6 py-2 rounded text-xs shadow-sm transition"
               >
-                {mode === "tambah" ? "Simpan Paket Baru" : "Simpan Perubahan"}
+                {mode === "tambah" ? "Simpan Paket Baru ke Database" : "Simpan Perubahan Database"}
               </button>
             </div>
           </form>

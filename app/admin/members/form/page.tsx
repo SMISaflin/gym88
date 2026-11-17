@@ -2,18 +2,28 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useToast } from "@/components/ToastProvider";
+
+interface Member {
+  id: string;
+  name: string;
+  nim: string;
+  phone: string;
+  gender: string;
+  status: string;
+  package: string;
+}
 
 export default function GymMemberManagePage() {
-  // Daftar data member awal
-  const [members, setMembers] = useState([
-    { id: 1, name: "Ahmad Fauzi", nim: "20231001", phone: "081234567890", gender: "Laki-laki", status: "Aktif", package: "Regular" },
-    { id: 2, name: "Siti Nurhaliza", nim: "20231002", phone: "081234567891", gender: "Perempuan", status: "Aktif", package: "Premium" },
-    { id: 3, name: "Budi Santoso", nim: "20231003", phone: "081234567892", gender: "Laki-laki", status: "Kurang Aktif", package: "Basic" },
-  ]);
+  const { showToast } = useToast();
+  
+  // Daftar data member dari Database MySQL
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mode halaman: 'daftar' (tabel), 'tambah', 'ubah', 'detail'
-  const [mode, setMode] = useState<"daftar" | "tambah" | "ubah" | "detail">("daftar");
-  const [selectedId, setSelectedId] = useState<number | null>(1);
+  // Mode halaman: 'daftar' (tabel), 'tambah', 'ubah'
+  const [mode, setMode] = useState<"daftar" | "tambah" | "ubah">("daftar");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -22,84 +32,141 @@ export default function GymMemberManagePage() {
     phone: "",
     gender: "Laki-laki",
     status: "Aktif",
-    package: "Regular",
+    packageId: "",
   });
 
-  // Sinkronisasi data ke localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("gym88_members_manage");
-    if (saved) {
-      try {
-        setMembers(JSON.parse(saved));
-      } catch (e) {
-        console.error(e);
+  // Paket membership yang tersedia dari database
+  const [packages, setPackages] = useState<any[]>([]);
+
+  // Ambil daftar member murni dari API database
+  const fetchMembers = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/admin/members");
+      const json = await res.json();
+      if (json.success) {
+        setMembers(json.data);
+        if (json.data.length > 0 && (!selectedId || !json.data.some((m: Member) => m.id === selectedId))) {
+          setSelectedId(json.data[0].id);
+        }
+      } else {
+        showToast("Gagal memuat data member dari server.", "error");
       }
+    } catch (error) {
+      console.error(error);
+      showToast("Terjadi kesalahan koneksi database.", "error");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Ambil daftar paket untuk pilihan dropdown
+  const fetchPackages = async () => {
+    try {
+      const res = await fetch("/api/admin/packages");
+      const json = await res.json();
+      if (json.success) {
+        setPackages(json.data);
+      }
+    } catch (error) {
+      console.error("Gagal memuat paket:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchMembers();
+    fetchPackages();
   }, []);
-
-  const saveToStorage = (updated: typeof members) => {
-    setMembers(updated);
-    localStorage.setItem("gym88_members_manage", JSON.stringify(updated));
-  };
-
-  // Handler saat baris tabel dipilih untuk Ubah/Detail
-  const handleSelectMember = (m: any) => {
-    setSelectedId(m.id);
-    setFormData(m);
-  };
 
   // Tombol Aksi: Ubah mode ke Tambah
   const handleOpenTambah = () => {
-    setFormData({ name: "", nim: "", phone: "", gender: "Laki-laki", status: "Aktif", package: "Regular" });
+    setFormData({ 
+      name: "", 
+      nim: "", 
+      phone: "", 
+      gender: "Laki-laki", 
+      status: "Aktif", 
+      packageId: packages.length > 0 ? packages[0].id : "" 
+    });
     setMode("tambah");
   };
 
   // Tombol Aksi: Ubah mode ke Ubah
   const handleOpenUbah = () => {
-    const current = members.find((m) => m.id === selectedId);
+    const current: any = members.find((m) => m.id === selectedId);
     if (current) {
-      setFormData(current);
+      setFormData({
+        name: current.name,
+        nim: current.nim,
+        phone: current.phone,
+        gender: current.gender,
+        status: current.status,
+        packageId: current.packageId || (packages.length > 0 ? packages[0].id : ""),
+      });
       setMode("ubah");
     } else {
-      alert("Pilih data member terlebih dahulu pada menu Daftar!");
+      showToast("Pilih data member terlebih dahulu pada menu Daftar!", "warning");
     }
   };
 
-  // Tombol Aksi: Hapus data
-  const handleHapus = () => {
+  // Tombol Aksi: Hapus data dari Database via API
+  const handleHapus = async () => {
     if (!selectedId) {
-      alert("Pilih data member yang ingin dihapus!");
+      showToast("Pilih data member yang ingin dihapus!", "warning");
       return;
     }
-    if (confirm("Apakah Anda yakin ingin menghapus data member ini?")) {
-      const updated = members.filter((m) => m.id !== selectedId);
-      saveToStorage(updated);
-      setSelectedId(updated.length > 0 ? updated[0].id : null);
-      setMode("daftar");
+
+    if (window.confirm("Apakah Anda yakin ingin menghapus data member ini dari database?")) {
+      try {
+        const res = await fetch(`/api/admin/members?id=${selectedId}`, {
+          method: "DELETE",
+        });
+        const json = await res.json();
+        if (json.success) {
+          showToast("Member berhasil dihapus dari database!", "success");
+          fetchMembers();
+          setSelectedId(null);
+          setMode("daftar");
+        } else {
+          showToast(`Gagal menghapus: ${json.message}`, "error");
+        }
+      } catch (error) {
+        showToast("Terjadi kesalahan sistem saat menghapus data.", "error");
+      }
     }
   };
 
-  // Submit Simpan Tambah / Ubah
-  const handleSubmit = (e: React.FormEvent) => {
+  // Submit Simpan Tambah / Ubah ke Database API
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.nim) {
-      alert("Nama dan NIM wajib diisi!");
+      showToast("Nama dan NIM/ID wajib diisi!", "warning");
       return;
     }
 
-    if (mode === "tambah") {
-      const newId = members.length > 0 ? Math.max(...members.map((m) => m.id)) + 1 : 1;
-      const newMember = { id: newId, ...formData };
-      const updated = [newMember, ...members];
-      saveToStorage(updated);
-      setSelectedId(newId);
-      alert("Member baru berhasil ditambahkan!");
-    } else if (mode === "ubah" && selectedId) {
-      const updated = members.map((m) => (m.id === selectedId ? { ...m, ...formData } : m));
-      saveToStorage(updated);
-      alert("Data member berhasil diperbarui!");
+    try {
+      const url = "/api/admin/members";
+      const method = mode === "tambah" ? "POST" : "PUT";
+      const payload = mode === "ubah" ? { ...formData, id: selectedId } : formData;
+
+      const res = await fetch(url, {
+        method: method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        showToast(mode === "tambah" ? "Member baru berhasil disimpan ke database!" : "Data member berhasil diperbarui!", "success");
+        fetchMembers();
+        setMode("daftar");
+      } else {
+        showToast(`Gagal: ${json.message}`, "error");
+      }
+    } catch (error) {
+      showToast("Terjadi kesalahan koneksi ke server.", "error");
     }
-    setMode("daftar");
   };
 
   return (
@@ -117,7 +184,7 @@ export default function GymMemberManagePage() {
         {/* Title & Top Action Buttons */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h1 className="text-xl font-extrabold text-sky-600 tracking-tight">
-            Pengelolaan Data Anggota (Member)
+            Pengelolaan Data Anggota (Member) Database
           </h1>
 
           {/* Button Group: TAMBAH, UBAH, HAPUS, DAFTAR */}
@@ -157,10 +224,9 @@ export default function GymMemberManagePage() {
         <div className="bg-sky-400 text-white text-xs px-4 py-3 rounded-xl font-medium shadow-inner flex items-center space-x-2">
           <i className="fa-solid fa-circle-info text-sm"></i>
           <span>
-            {mode === "daftar" && "Menampilkan seluruh daftar rekapitulasi anggota Gym 88. Pilih salah satu baris untuk dikelola."}
-            {mode === "tambah" && "Formulir penambahan data anggota baru Gym 88 per periode aktif."}
-            {mode === "ubah" && "Formulir pembaruan informasi profil dan status keaktifan anggota."}
-            {mode === "detail" && "Tampilan detail informasi lengkap anggota terpilih."}
+            {mode === "daftar" && "Menampilkan seluruh daftar rekapitulasi anggota Gym 88 langsung dari database MySQL. Pilih salah satu baris untuk dikelola."}
+            {mode === "tambah" && "Formulir penambahan data anggota baru Gym 88 ke dalam sistem database."}
+            {mode === "ubah" && "Formulir pembaruan informasi profil dan status keaktifan anggota di database."}
           </span>
         </div>
 
@@ -182,37 +248,51 @@ export default function GymMemberManagePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
-                  {members.map((m, idx) => (
-                    <tr 
-                      key={m.id} 
-                      onClick={() => setSelectedId(m.id)}
-                      className={`cursor-pointer transition ${selectedId === m.id ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
-                    >
-                      <td className="p-3 text-center">
-                        <input 
-                          type="radio" 
-                          name="selectedMember" 
-                          checked={selectedId === m.id} 
-                          onChange={() => setSelectedId(m.id)}
-                          className="accent-sky-500"
-                        />
-                      </td>
-                      <td className="p-3 text-slate-500">{idx + 1}</td>
-                      <td className="p-3 font-bold text-sky-700">{m.name}</td>
-                      <td className="p-3 font-mono">{m.nim}</td>
-                      <td className="p-3">{m.phone}</td>
-                      <td className="p-3">{m.gender}</td>
-                      <td className="p-3 font-bold">{m.package}</td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          m.status === 'Aktif' ? 'bg-emerald-100 text-emerald-700' : 
-                          m.status === 'Kurang Aktif' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
-                        }`}>
-                          {m.status}
-                        </span>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400">
+                        <i className="fa-solid fa-spinner animate-spin text-lg mr-2"></i> Memuat data dari database...
                       </td>
                     </tr>
-                  ))}
+                  ) : members.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400">
+                        Belum ada data member terdaftar di database.
+                      </td>
+                    </tr>
+                  ) : (
+                    members.map((m, idx) => (
+                      <tr 
+                        key={m.id} 
+                        onClick={() => setSelectedId(m.id)}
+                        className={`cursor-pointer transition ${selectedId === m.id ? 'bg-sky-50' : 'hover:bg-slate-50'}`}
+                      >
+                        <td className="p-3 text-center">
+                          <input 
+                            type="radio" 
+                            name="selectedMember" 
+                            checked={selectedId === m.id} 
+                            onChange={() => setSelectedId(m.id)}
+                            className="accent-sky-500"
+                          />
+                        </td>
+                        <td className="p-3 text-slate-500">{idx + 1}</td>
+                        <td className="p-3 font-bold text-sky-700">{m.name}</td>
+                        <td className="p-3 font-mono">{m.nim}</td>
+                        <td className="p-3">{m.phone}</td>
+                        <td className="p-3">{m.gender}</td>
+                        <td className="p-3 font-bold">{m.package}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            m.status === 'Aktif' ? 'bg-emerald-100 text-emerald-700' : 
+                            m.status === 'Kurang Aktif' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                          }`}>
+                            {m.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -228,7 +308,7 @@ export default function GymMemberManagePage() {
           </div>
         )}
 
-        {/* KONTEN UTAMA: MODE TAMBAH & UBAH (FORMULIR DUA KOLOM) */}
+        {/* KONTEN UTAMA: MODE TAMBAH & UBAH (FORMULIR) */}
         {(mode === "tambah" || mode === "ubah") && (
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-xs">
@@ -257,8 +337,8 @@ export default function GymMemberManagePage() {
                   required
                   value={formData.nim}
                   onChange={(e) => setFormData({ ...formData, nim: e.target.value })}
-                  placeholder="Contoh: 20231001"
-                  className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 focus:outline-none focus:border-sky-500 font-medium"
+                  placeholder="Contoh: GYM88-0015"
+                  className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 focus:outline-none focus:border-sky-500 font-medium font-mono"
                 />
               </div>
 
@@ -299,13 +379,16 @@ export default function GymMemberManagePage() {
                 </label>
                 <div className="relative">
                   <select
-                    value={formData.package}
-                    onChange={(e) => setFormData({ ...formData, package: e.target.value })}
+                    value={formData.packageId}
+                    onChange={(e) => setFormData({ ...formData, packageId: e.target.value })}
                     className="w-full bg-white border border-slate-300 rounded px-3 py-2 pr-8 text-slate-800 focus:outline-none focus:border-sky-500 font-medium appearance-none"
                   >
-                    <option value="Basic">Basic - Rp 150.000</option>
-                    <option value="Regular">Regular - Rp 250.000</option>
-                    <option value="Premium">Premium - Rp 400.000</option>
+                    <option value="">-- Pilih Paket --</option>
+                    {packages.map((pkg) => (
+                      <option key={pkg.id} value={pkg.id}>
+                        {pkg.title} ({pkg.price})
+                      </option>
+                    ))}
                   </select>
                   <i className="fa-solid fa-caret-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"></i>
                 </div>
@@ -344,7 +427,7 @@ export default function GymMemberManagePage() {
                 type="submit"
                 className="bg-sky-500 hover:bg-sky-600 text-white font-bold px-6 py-2 rounded text-xs shadow-sm transition"
               >
-                {mode === "tambah" ? "Simpan Data Baru" : "Simpan Perubahan"}
+                {mode === "tambah" ? "Simpan Data Baru ke Database" : "Simpan Perubahan Database"}
               </button>
             </div>
           </form>

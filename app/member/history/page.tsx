@@ -1,33 +1,78 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useToast } from "@/components/ToastProvider";
 
-const initialHistory = [
-  { id: 1, date: "06 Jan 2026", checkInTime: "08:15 WITA", checkOutTime: "10:00 WITA", status: "Hadir", ket: "Sesi Latihan Pagi" },
-  { id: 2, date: "05 Jan 2026", checkInTime: "-", checkOutTime: "-", status: "Tidak Hadir", ket: "Izin / Sakit" },
-  { id: 3, date: "04 Jan 2026", checkInTime: "16:30 WITA", checkOutTime: "18:15 WITA", status: "Hadir", ket: "Sesi Latihan Sore" },
-  { id: 4, date: "03 Jan 2026", checkInTime: "09:00 WITA", checkOutTime: "10:45 WITA", status: "Hadir", ket: "Cardio & Fitness" },
-  { id: 5, date: "02 Jan 2026", checkInTime: "17:00 WITA", checkOutTime: "18:30 WITA", status: "Hadir", ket: "Sesi Latihan Sore" },
-  { id: 6, date: "30 Des 2025", checkInTime: "08:30 WITA", checkOutTime: "10:15 WITA", status: "Hadir", ket: "Sesi Latihan Pagi" },
-  { id: 7, date: "28 Des 2025", checkInTime: "16:00 WITA", checkOutTime: "17:30 WITA", status: "Hadir", ket: "Weight Training" },
-];
+interface AttendanceRecord {
+  id: string;
+  date: string;
+  checkInTime: string;
+  checkOutTime: string;
+  status: string;
+  ket: string;
+}
 
 export default function MemberHistoryPage() {
-  const [historyList] = useState(initialHistory);
+  const { showToast } = useToast();
+  
+  const [historyList, setHistoryList] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("Semua");
 
+  // Ambil riwayat absensi dari database MySQL via API
+  useEffect(() => {
+    async function fetchHistoryData() {
+      try {
+        setLoading(true);
+        let targetCode = "GYM88-0012";
+        let targetEmail = "";
+
+        const saved = localStorage.getItem("gym88_member_profile");
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (parsed.nim) targetCode = `GYM88-${parsed.nim}`;
+            if (parsed.email) targetEmail = parsed.email;
+          } catch (e) {
+            console.error("Gagal membaca localStorage:", e);
+          }
+        }
+
+        const query = targetEmail ? `email=${targetEmail}` : `memberCode=${targetCode}`;
+        const res = await fetch(`/api/member/history?${query}`);
+        const json = await res.json();
+
+        if (json.success && Array.isArray(json.data)) {
+          setHistoryList(json.data);
+        } else {
+          setHistoryList([]);
+        }
+      } catch (error) {
+        console.error("Gagal memuat riwayat absensi:", error);
+        showToast("Gagal memuat riwayat dari database.", "error");
+        setHistoryList([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchHistoryData();
+  }, [showToast]);
+
   // Filter Data
-  const filteredHistory = historyList.filter((item) => {
+  const filteredHistory = Array.isArray(historyList) ? historyList.filter((item) => {
     const matchesSearch = item.date.toLowerCase().includes(searchQuery.toLowerCase()) || item.ket.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === "Semua" || item.status === statusFilter;
     return matchesSearch && matchesStatus;
-  });
+  }) : [];
 
   // Hitung Ringkasan Statistik
-  const totalHadir = historyList.filter((h) => h.status === "Hadir").length;
-  const totalTidakHadir = historyList.filter((h) => h.status === "Tidak Hadir").length;
-  const persentaseHadir = Math.round((totalHadir / historyList.length) * 100) || 0;
+  const totalHadir = Array.isArray(historyList) ? historyList.filter((h) => h.status === "Hadir" || h.status === "HADIR").length : 0;
+  const totalTidakHadir = Array.isArray(historyList) ? historyList.filter((h) => h.status === "Tidak Hadir" || h.status === "ABSEN").length : 0;
+  const totalSesi = historyList.length;
+  const persentaseHadir = totalSesi > 0 ? Math.round((totalHadir / totalSesi) * 100) : 0;
 
   return (
     <div className="space-y-6 w-full pb-10 text-xs">
@@ -38,8 +83,15 @@ export default function MemberHistoryPage() {
             Log Aktivitas Gym 88
           </div>
           <h1 className="text-2xl md:text-3xl font-black tracking-tight">Riwayat Kehadiran 🏋️‍♂️</h1>
-          <p className="text-blue-100 text-xs md:text-sm">Dokumentasi lengkap log waktu masuk dan sesi latihan bulanan Anda.</p>
+          <p className="text-blue-100 text-xs md:text-sm">Dokumentasi lengkap log waktu masuk dan sesi latihan bulanan Anda dari database.</p>
         </div>
+        <Link 
+          href="/member/attendance"
+          className="bg-white/10 hover:bg-white/20 text-white font-bold px-4 py-2.5 rounded-2xl text-xs transition border border-white/20 backdrop-blur-md flex items-center space-x-2"
+        >
+          <i className="fa-solid fa-check-to-slot"></i>
+          <span>Absen Hari Ini</span>
+        </Link>
       </div>
 
       {/* Ringkasan Statistik Cards (Grid 3 Kolom) */}
@@ -96,7 +148,7 @@ export default function MemberHistoryPage() {
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 rounded-2xl font-bold transition whitespace-nowrap ${
+                className={`px-4 py-2 rounded-2xl font-bold transition whitespace-nowrap cursor-pointer ${
                   statusFilter === status
                     ? "bg-blue-600 text-white shadow-sm"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -115,13 +167,22 @@ export default function MemberHistoryPage() {
               <tr className="border-b border-slate-100 text-slate-400 bg-slate-50/50 uppercase text-[10px] tracking-wider font-extrabold">
                 <th className="p-4 md:p-5">Tanggal</th>
                 <th className="p-4 md:p-5">Jam Masuk</th>
-                <th className="p-4 md:p-5">Jam Keluar</th>
+                {/* <th className="p-4 md:p-5">Jam Keluar</th> */}
                 <th className="p-4 md:p-5">Status</th>
                 <th className="p-4 md:p-5">Keterangan Sesi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
-              {filteredHistory.length > 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="p-10 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <i className="fa-solid fa-spinner animate-spin text-xl text-blue-600"></i>
+                      <span>Memuat riwayat dari database MySQL...</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredHistory.length > 0 ? (
                 filteredHistory.map((h) => (
                   <tr key={h.id} className="hover:bg-slate-50/80 transition">
                     <td className="p-4 md:p-5 font-bold text-slate-900">
@@ -131,16 +192,16 @@ export default function MemberHistoryPage() {
                       </div>
                     </td>
                     <td className="p-4 md:p-5 font-mono text-slate-600">{h.checkInTime}</td>
-                    <td className="p-4 md:p-5 font-mono text-slate-600">{h.checkOutTime}</td>
+                    {/* <td className="p-4 md:p-5 font-mono text-slate-600">{h.checkOutTime}</td> */}
                     <td className="p-4 md:p-5">
                       <span
                         className={`px-3 py-1 rounded-full text-[10px] font-bold inline-flex items-center space-x-1 ${
-                          h.status === "Hadir"
+                          h.status === "Hadir" || h.status === "HADIR"
                             ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
                             : "bg-rose-50 text-rose-600 border border-rose-200"
                         }`}
                       >
-                        <span className={`w-1.5 h-1.5 rounded-full mr-1 ${h.status === "Hadir" ? "bg-emerald-500" : "bg-rose-500"}`}></span>
+                        <span className={`w-1.5 h-1.5 rounded-full mr-1 ${h.status === "Hadir" || h.status === "HADIR" ? "bg-emerald-500" : "bg-rose-500"}`}></span>
                         <span>{h.status}</span>
                       </span>
                     </td>
@@ -149,8 +210,11 @@ export default function MemberHistoryPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400">
-                    Tidak ada riwayat kehadiran yang ditemukan.
+                  <td colSpan={5} className="p-10 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center space-y-1">
+                      <i className="fa-solid fa-folder-open text-2xl text-slate-300"></i>
+                      <span>Belum ada riwayat kehadiran tercatat di database.</span>
+                    </div>
                   </td>
                 </tr>
               )}

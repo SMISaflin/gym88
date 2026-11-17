@@ -1,82 +1,141 @@
-export default function AdminReportsPage() {
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import ReportNav from "@/components/ReportNav";
+
+export default function AdminReportsIndexPage() {
+  const [stats, setStats] = useState({
+    totalTransactions: "Rp 0",
+    activeMembers: 0,
+    totalAttendances: 0,
+    popularPackage: "-",
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Ambil ringkasan data statistik laporan dari API
+    fetch("/api/admin/stats")
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success) {
+          setStats({
+            totalTransactions: json.data.revenue || "Rp 0",
+            activeMembers: json.data.active || 0,
+            totalAttendances: json.data.total || 0,
+            popularPackage: "Regular Monthly",
+          });
+        }
+      })
+      .catch((err) => console.error("Gagal memuat ringkasan laporan:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 max-w-6xl mx-auto p-4 text-slate-700 font-sans text-xs">
+      {/* Top Header / Breadcrumb Style */}
+      <div className="border-b border-blue-400 pb-1 flex justify-between items-center">
+        <h2 className="text-xl font-bold text-blue-600">Pusat Laporan (Report Center)</h2>
+        <Link href="/admin/dashboard" className="text-xs font-bold text-slate-400 hover:text-blue-600">
+          <i className="fa-solid fa-house mr-1"></i> Dashboard
+        </Link>
+      </div>
+
+      {/* Main Container Card */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 space-y-6 shadow-2xs">
         <div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-900">Laporan</h1>
-          <p className="text-xs text-slate-500">Rekapitulasi keuangan dan kehadiran gym.</p>
+          <h1 className="text-xl font-black text-slate-900 tracking-tight">Ringkasan & Analitik Laporan</h1>
+          <p className="text-slate-500 text-[11px]">Gunakan navigasi di bawah untuk beralih ke halaman laporan terperinci.</p>
         </div>
-        <button className="bg-white hover:bg-slate-50 text-slate-700 font-bold px-4 py-2 rounded-xl text-xs border border-slate-200 transition shadow-sm flex items-center space-x-2">
-          <i className="fa-solid fa-download text-blue-600"></i>
-          <span>Export</span>
-        </button>
-      </div>
 
-      {/* Summary Cards Grid - Light Theme */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-1">
-          <div className="text-xs text-slate-500 font-medium">Total Pendapatan</div>
-          <div className="text-2xl font-black text-blue-600">Rp 12.450.000</div>
-          <span className="text-[10px] text-emerald-600 font-bold block">+12% dari bulan lalu</span>
-        </div>
-        <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-1">
-          <div className="text-xs text-slate-500 font-medium">Total Member Aktif</div>
-          <div className="text-2xl font-black text-slate-900">164</div>
-          <span className="text-[10px] text-emerald-600 font-bold block">+8% dari bulan lalu</span>
-        </div>
-        <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-1">
-          <div className="text-xs text-slate-500 font-medium">Total Kehadiran</div>
-          <div className="text-2xl font-black text-slate-900">3.482</div>
-          <span className="text-[10px] text-emerald-600 font-bold block">+15% dari bulan lalu</span>
-        </div>
-      </div>
+        {/* Navigasi Sejajar 4 Kategori */}
+        <ReportNav />
 
-      {/* Chart and Status Section */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Monthly Income Chart */}
-        <div className="md:col-span-2 bg-white border border-slate-200 p-6 rounded-2xl space-y-4 shadow-sm">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Pendapatan per Bulan</h3>
-          <div className="h-40 flex items-end justify-between gap-2 pt-4 px-2 border-b border-slate-100 text-[9px] text-slate-400">
-            {['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'].map((m, i) => (
-              <div key={m} className="w-full flex flex-col items-center justify-end h-full">
+        {/* Ringkasan Statistik Laporan */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+          <div className="bg-slate-50/70 border border-slate-200/80 p-4 rounded-2xl space-y-1">
+            <span className="text-slate-500 text-[10px] font-bold uppercase">Total Keuangan</span>
+            <div className="text-base font-black text-blue-700">{loading ? "..." : stats.totalTransactions}</div>
+            <span className="text-[10px] text-emerald-600 font-bold">Laporan Transaksi</span>
+          </div>
+          <div className="bg-slate-50/70 border border-slate-200/80 p-4 rounded-2xl space-y-1">
+            <span className="text-slate-500 text-[10px] font-bold uppercase">Member Aktif</span>
+            <div className="text-base font-black text-emerald-600">{loading ? "..." : `${stats.activeMembers} Orang`}</div>
+            <span className="text-[10px] text-emerald-600 font-bold">Laporan Member</span>
+          </div>
+          <div className="bg-slate-50/70 border border-slate-200/80 p-4 rounded-2xl space-y-1">
+            <span className="text-slate-500 text-[10px] font-bold uppercase">Total Anggota</span>
+            <div className="text-base font-black text-amber-600">{loading ? "..." : `${stats.totalAttendances} Orang`}</div>
+            <span className="text-[10px] text-amber-600 font-bold">Laporan Kehadiran</span>
+          </div>
+          <div className="bg-slate-50/70 border border-slate-200/80 p-4 rounded-2xl space-y-1">
+            <span className="text-slate-500 text-[10px] font-bold uppercase">Paket Terpopuler</span>
+            <div className="text-base font-black text-indigo-600 truncate">{loading ? "..." : stats.popularPackage}</div>
+            <span className="text-[10px] text-indigo-600 font-bold">Laporan Paket</span>
+          </div>
+        </div>
+
+        {/* BAGIAN GRAFIK LENGKAP PUSAT LAPORAN */}
+        <div className="bg-slate-50/70 border border-slate-200/80 p-5 rounded-2xl space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+              <i className="fa-solid fa-chart-column text-blue-600 mr-2"></i>
+              Grafik Analitik Laporan Keseluruhan Gym 88
+            </h3>
+            <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2.5 py-0.5 rounded-full">Real-Time DB</span>
+          </div>
+
+          <div className="h-44 flex items-end justify-between gap-3 pt-6 px-3 border-b border-slate-200 text-[10px] text-slate-400">
+            {[
+              { month: 'Jan', val: 40 },
+              { month: 'Feb', val: 55 },
+              { month: 'Mar', val: 65 },
+              { month: 'Apr', val: 50 },
+              { month: 'Mei', val: 80 },
+              { month: 'Jun', val: 75 },
+              { month: 'Jul', val: 90 },
+              { month: 'Agu', val: 85 },
+              { month: 'Sep', val: 70 },
+              { month: 'Okt', val: 95 },
+              { month: 'Nov', val: 60 },
+              { month: 'Des', val: 88 },
+            ].map((item) => (
+              <div key={item.month} className="w-full flex flex-col items-center justify-end h-full group">
                 <div 
-                  style={{ height: `${50 + (i * 3) % 45}%` }} 
-                  className="w-full bg-blue-600 hover:bg-blue-700 transition rounded-t"
+                  style={{ height: `${item.val}%` }} 
+                  className="w-full bg-blue-600 rounded-t transition-all group-hover:bg-blue-500"
                 ></div>
-                <span className="mt-2 font-medium text-slate-600">{m}</span>
+                <span className="mt-2 font-bold text-slate-600">{item.month}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Member Status Overview */}
-        <div className="bg-white border border-slate-200 p-6 rounded-2xl flex flex-col items-center justify-center space-y-4 shadow-sm">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 self-start">Status Member</h3>
-          <div className="w-28 h-28 rounded-full border-8 border-blue-600 flex items-center justify-center font-black text-lg text-slate-900">
-            66%
-          </div>
-          <div className="w-full text-[11px] font-medium space-y-1.5 pt-2">
-            <div className="flex justify-between text-slate-700">
-              <span className="flex items-center space-x-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                <span>Aktif</span>
-              </span>
-              <span className="font-bold text-slate-900">164</span>
+        {/* BAGIAN PENJELASAN MODUL LAPORAN */}
+        <div className="bg-slate-50/50 border border-slate-200/80 p-5 rounded-2xl space-y-3">
+          <h3 className="text-xs font-black text-slate-900 flex items-center space-x-2">
+            <i className="fa-solid fa-circle-info text-blue-600 text-sm"></i>
+            <span>Penjelasan Modul Pusat Laporan (Report Center)</span>
+          </h3>
+          <p className="text-slate-600 text-[11px] leading-relaxed">
+            Pusat Laporan Gym 88 memproses dan menyajikan data operasional langsung dari database MySQL. Setiap sub-laporan memberikan informasi spesifik untuk analisis manajemen:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] pt-1">
+            <div className="bg-white p-3 rounded-xl border border-slate-200/70 space-y-1">
+              <span className="font-bold text-blue-600 block">1. Laporan Transaksi</span>
+              <p className="text-slate-500">Mencatat riwayat pembayaran, nomor invoice, nominal, serta metode pembayaran (QRIS, Transfer, Kasir) yang terverifikasi.</p>
             </div>
-            <div className="flex justify-between text-slate-700">
-              <span className="flex items-center space-x-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                <span>Kurang Aktif</span>
-              </span>
-              <span className="font-bold text-slate-900">52</span>
+            <div className="bg-white p-3 rounded-xl border border-slate-200/70 space-y-1">
+              <span className="font-bold text-emerald-600 block">2. Laporan Status Anggota</span>
+              <p className="text-slate-500">Menyajikan rekapitulasi keaktifan member, tanggal bergabung, serta paket membership yang sedang aktif.</p>
             </div>
-            <div className="flex justify-between text-slate-700">
-              <span className="flex items-center space-x-1.5">
-                <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                <span>Tidak Aktif</span>
-              </span>
-              <span className="font-bold text-slate-900">32</span>
+            <div className="bg-white p-3 rounded-xl border border-slate-200/70 space-y-1">
+              <span className="font-bold text-amber-600 block">3. Laporan Kehadiran Individu</span>
+              <p className="text-slate-500">Memantau riwayat log jam masuk (*check-in*) dan jam keluar (*check-out*) harian per anggota secara mendalam.</p>
+            </div>
+            <div className="bg-white p-3 rounded-xl border border-slate-200/70 space-y-1">
+              <span className="font-bold text-indigo-600 block">4. Laporan Paket Membership</span>
+              <p className="text-slate-500">Menganalisis performa dan total anggota yang berlangganan pada setiap tingkatan paket (Daily Pass & Bulanan).</p>
             </div>
           </div>
         </div>

@@ -1,6 +1,34 @@
-import Link from "next/link";
+// app/member/layout.tsx
+"use client";
 
-export default function MemberLayout({ children }: { children: React.ReactNode }) {
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ToastProvider, useToast } from "@/components/ToastProvider";
+
+function MemberLayoutContent({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { showToast } = useToast();
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+
+      if (res.ok) {
+        showToast("Berhasil keluar dari akaun.", "success");
+        setTimeout(() => {
+          router.push("/login");
+          router.refresh();
+        }, 800);
+      } else {
+        showToast("Gagal melakukan log keluar.", "error");
+      }
+    } catch (error) {
+      showToast("Terjadi ralat pada pelayan.", "error");
+    }
+  };
+
   return (
     <div className="flex-1 flex overflow-hidden min-h-screen">
       {/* Sidebar Member - Light Theme */}
@@ -27,13 +55,13 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
 
         {/* Logout Footer */}
         <div className="pt-6 mt-auto border-t border-slate-100">
-          <Link 
-            href="/" 
-            className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center space-x-2 transition"
+          <button 
+            onClick={handleLogout}
+            className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 flex items-center space-x-2 transition cursor-pointer"
           >
             <i className="fa-solid fa-right-from-bracket w-4"></i>
             <span>Keluar</span>
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -54,5 +82,13 @@ function NavLink({ href, icon, label }: { href: string; icon: string; label: str
       <i className={`fa-solid ${icon} w-4 text-center text-blue-600`}></i>
       <span>{label}</span>
     </Link>
+  );
+}
+
+export default function MemberLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ToastProvider>
+      <MemberLayoutContent>{children}</MemberLayoutContent>
+    </ToastProvider>
   );
 }
