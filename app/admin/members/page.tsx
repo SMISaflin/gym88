@@ -200,20 +200,20 @@ export default function GymMemberManagePage() {
 
           {/* Button Group: TAMBAH, UBAH, HAPUS, DAFTAR */}
           <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase">
-            <button 
+            {/* <button 
               onClick={handleOpenTambah}
               className={`px-3.5 py-2 rounded shadow-sm flex items-center space-x-1 transition text-white cursor-pointer ${mode === 'tambah' ? 'bg-sky-600 ring-2 ring-sky-300' : 'bg-sky-400 hover:bg-sky-500'}`}
             >
               <i className="fa-solid fa-plus text-sm mr-1"></i>
               <span>TAMBAH</span>
-            </button>
-            <button 
+            </button> */}
+            {/* <button 
               onClick={handleOpenUbah}
               className={`px-3.5 py-2 rounded shadow-sm flex items-center space-x-1 transition text-white cursor-pointer ${mode === 'ubah' ? 'bg-amber-600 ring-2 ring-amber-300' : 'bg-amber-400 hover:bg-amber-500'}`}
             >
               <i className="fa-solid fa-pen text-sm mr-1"></i>
               <span>UBAH</span>
-            </button>
+            </button> */}
             <button 
               onClick={handleHapus}
               className="bg-rose-500 hover:bg-rose-600 text-white px-3.5 py-2 rounded shadow-sm flex items-center space-x-1 transition cursor-pointer"

@@ -15,6 +15,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id">
+      <head>
+        {/* Script Midtrans Snap (Ganti dengan URL production jika sudah live) */}
+        <script 
+          src="https://app.sandbox.midtrans.com/snap/snap.js" 
+          data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
+          async
+        ></script>
+      </head>
       <body>{children}</body>
     </html>
   );
